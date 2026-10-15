@@ -1,0 +1,19 @@
+{
+  "name": "carte-di-casa",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Carte di Casa: bollette, lettere e messaggi spiegati semplici, con scadenze e controllo truffe.",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check server/claude.js && node --check server/inviti.js && node --check server/limiti.js && node --check public/app.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,23 @@
+# Configurazione per Render (https://render.com): collega il repository GitHub
+# e Render costruisce e pubblica l'app da solo a ogni aggiornamento.
+services:
+  - type: web
+    name: carte-di-casa
+    runtime: node
+    plan: free            # per persone anziane meglio "starter": niente attesa al risveglio
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/stato
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: ANTHROPIC_API_KEY
+        sync: false        # la inserisci tu nel pannello di Render
+      - key: INVITI
+        sync: false        # es. Alfredo:mela-verde-2731, Rosa:sole-alto-9048
+      - key: SESSION_SECRET
+        generateValue: true

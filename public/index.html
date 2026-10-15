@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Carte di Casa</title>
+  <meta name="description" content="Bollette, lettere e messaggi spiegati in parole semplici, con le scadenze e il controllo delle truffe.">
+  <meta name="theme-color" content="#1740B8">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Carte di Casa">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="/icons/icon-192.png" alt="" width="40" height="40">
+      <span>Carte di Casa</span>
+    </div>
+    <button class="size" id="sizeBtn" type="button" aria-pressed="false">Testo più grande</button>
+  </header>
+
+  <main>
+    <p class="toast" id="toast" role="status" hidden></p>
+
+    <!-- ── Ho ricevuto qualcosa ── -->
+    <section class="view" id="view-ricevuto" aria-labelledby="t-ricevuto">
+      <h1 id="t-ricevuto" class="sr-only">Ho ricevuto qualcosa</h1>
+      <button class="banner" id="dueBanner" type="button" hidden></button>
+      <div class="card notice" id="noInvite" hidden>
+        <p><strong>Per leggere bollette e lettere ti serve il link d'invito.</strong></p>
+        <p class="muted">Chiedilo a chi ti ha consigliato l'app e aprilo da questo telefono. Intanto puoi già controllare i messaggi strani e tenere le tue scadenze.</p>
+      </div>
+
+      <div class="card" id="inputCard">
+        <p class="step"><b>1</b> Fammi vedere cosa hai ricevuto</p>
+        <div class="pick">
+          <label class="btn primary photo">
+            <span aria-hidden="true">📷</span> Fai una foto
+            <input type="file" id="camera" accept="image/*" capture="environment">
+          </label>
+          <label class="btn photo">
+            Scegli una foto o un PDF
+            <input type="file" id="picker" accept="image/*,application/pdf">
+          </label>
+        </div>
+        <div class="chosen" id="chosen" hidden>
+          <img id="thumb" alt="Anteprima della foto scelta" hidden>
+          <span class="pdf" id="pdfIcon" hidden aria-hidden="true">PDF</span>
+          <span class="fname" id="fname"></span>
+          <button class="link" id="dropFile" type="button">Togli</button>
+        </div>
+        <p class="or">oppure</p>
+        <label for="msg" class="label">Incolla qui il messaggio o il testo</label>
+        <textarea id="msg" rows="5" placeholder="Tieni premuto il dito qui e scegli Incolla"></textarea>
+        <p class="step"><b>2</b> Premi il pulsante</p>
+        <button class="btn go" id="go" type="button">Spiegamelo</button>
+      </div>
+
+      <section class="card result" id="result" hidden aria-live="polite" aria-labelledby="rTitle"></section>
+
+      <details class="card history" id="historyBox" hidden>
+        <summary>Le ultime cose che mi hai fatto leggere</summary>
+        <ul id="history"></ul>
+      </details>
+    </section>
+
+    <!-- ── Scadenze ── -->
+    <section class="view" id="view-scadenze" hidden aria-labelledby="t-scadenze">
+      <h1 id="t-scadenze">Le mie scadenze</h1>
+      <div class="chips" id="dueCounts"></div>
+      <div id="dueGroups"></div>
+      <div class="row">
+        <button class="btn" id="allIcs" type="button" hidden>Metti tutte nel calendario</button>
+      </div>
+      <details class="card" id="addBox">
+        <summary>Aggiungi una scadenza a mano</summary>
+        <form id="addForm" class="form">
+          <label class="label" for="addWhat">Cosa</label>
+          <input id="addWhat" required maxlength="80" placeholder="Es. Bolletta del gas">
+          <label class="label" for="addDate">Entro quando</label>
+          <input id="addDate" type="date" required>
+          <label class="label" for="addAmount">Quanto (se c'è da pagare)</label>
+          <input id="addAmount" inputmode="decimal" placeholder="Es. 84,30">
+          <button class="btn primary" type="submit">Aggiungi</button>
+        </form>
+      </details>
+      <details class="card" id="doneBox" hidden>
+        <summary id="doneTitle">Già fatte</summary>
+        <ul class="items" id="doneList"></ul>
+      </details>
+    </section>
+
+    <!-- ── Aiuto ── -->
+    <section class="view" id="view-aiuto" hidden aria-labelledby="t-aiuto">
+      <h1 id="t-aiuto">Aiuto</h1>
+
+      <div class="card" id="installCard">
+        <h2>Mettila sul telefono</h2>
+        <p id="installText" class="muted"></p>
+        <button class="btn primary" id="installBtn" type="button" hidden>Installa l'app</button>
+      </div>
+
+      <div class="card">
+        <h2>Il tuo invito</h2>
+        <p id="inviteText"></p>
+        <form id="codeForm" class="form" hidden>
+          <label class="label" for="codeInput">Hai un codice d'invito? Scrivilo qui</label>
+          <input id="codeInput" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button class="btn" type="submit">Entra</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>I tuoi dati</h2>
+        <p>Le scadenze e le cose lette restano <strong>solo su questo telefono</strong>. Le foto e i testi che mi fai leggere passano da Claude, l'intelligenza artificiale che li spiega, e non vengono salvati da nessuna parte.</p>
+        <p class="muted">Se cambi telefono, salva prima una copia e poi aprila sul telefono nuovo.</p>
+        <div class="row">
+          <button class="btn" id="exportBtn" type="button">Salva una copia</button>
+          <label class="btn photo">Riprendi da una copia
+            <input type="file" id="importFile" accept="application/json,.json">
+          </label>
+        </div>
+        <button class="link danger" id="wipeBtn" type="button">Cancella tutto da questo telefono</button>
+      </div>
+
+      <div class="card help">
+        <h2>Hai già cliccato, dato dati o pagato?</h2>
+        <ul>
+          <li><strong>Chiama subito la tua banca</strong> al numero scritto sul retro della carta e fai bloccare carta e conto.</li>
+          <li>Avvisa un familiare o una persona di fiducia. Non vergognarti: succede a tanti.</li>
+          <li>Segnala alla Polizia Postale su <a href="https://www.commissariatodips.it" target="_blank" rel="noopener">commissariatodips.it</a>. In emergenza chiama il <strong>112</strong>.</li>
+          <li>Conserva il messaggio e il numero di chi l'ha mandato: servono per la denuncia.</li>
+        </ul>
+      </div>
+
+      <div class="card help">
+        <h2>Tre cose da ricordare sempre</h2>
+        <ul>
+          <li>Banca, Poste e INPS <strong>non chiedono mai</strong> codici, PIN o password per messaggio o al telefono.</li>
+          <li>Se un messaggio ti mette <strong>fretta o paura</strong>, fermati: è proprio quello che vuole il truffatore.</li>
+          <li>Un figlio o un nipote che scrive da un <strong>numero nuovo</strong> e chiede soldi? Chiamalo al numero vecchio prima di tutto.</li>
+        </ul>
+      </div>
+
+      <p class="foot">Carte di Casa spiega i documenti con l'intelligenza artificiale e può sbagliare: per pagamenti e scadenze importanti controlla sempre il foglio originale. Nel dubbio non cliccare, non pagare e chiedi a qualcuno di fiducia.</p>
+    </section>
+  </main>
+
+  <nav class="tabs" aria-label="Sezioni">
+    <button type="button" data-view="ricevuto" aria-current="page"><span aria-hidden="true">✉️</span>Ho ricevuto</button>
+    <button type="button" data-view="scadenze"><span aria-hidden="true">📅</span>Scadenze<b class="badge" id="badge" hidden></b></button>
+    <button type="button" data-view="aiuto"><span aria-hidden="true">❓</span>Aiuto</button>
+  </nav>
+
+  <script src="/regole.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

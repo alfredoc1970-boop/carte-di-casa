@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "Carte di Casa",
+  "short_name": "Carte di Casa",
+  "description": "Bollette, lettere e messaggi spiegati in parole semplici, con le scadenze e il controllo delle truffe.",
+  "lang": "it",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F2F4F7",
+  "theme_color": "#1740B8",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
