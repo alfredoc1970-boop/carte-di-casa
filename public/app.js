@@ -30,6 +30,8 @@
     storico: 'cdc_storico_v1',
     impostazioni: 'cdc_impostazioni_v1',
     invitato: 'cdc_invitato_v1',
+    contratti: 'cdc_contratti_v1',
+    mittente: 'cdc_mittente_v1',
   };
 
   function load(key, fallback) {
@@ -66,6 +68,7 @@
   }
   const fmtDate = (iso, long) =>
     parseIso(iso).toLocaleDateString('it-IT', long ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' } : { weekday: 'short', day: 'numeric', month: 'long' });
+  const fmtDay = (iso) => parseIso(iso).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
   const fmtEuro = (n) => Number(n).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
   function daysLabel(days) {
     if (days < -1) return `Scaduta da ${-days} giorni`;
@@ -113,13 +116,16 @@
   let storico = (load(KEYS.storico, []) || []).filter((s) => s && s.id && s.r);
   const settings = Object.assign({ grande: false, preavviso: 7 }, load(KEYS.impostazioni, {}));
   let invitato = load(KEYS.invitato, null); // true / false / null = non so
+  let contratti = (load(KEYS.contratti, []) || []).filter((c) => c && c.id && c.fornitore);
+  let me = Object.assign({ nome: '', indirizzo: '', citta: '' }, load(KEYS.mittente, {}));
   let server = { nome: '', letture: null };
 
   const saveScadenze = () => save(KEYS.scadenze, scadenze);
   const saveStorico = () => save(KEYS.storico, storico);
+  const saveContratti = () => save(KEYS.contratti, contratti);
 
   // ── Navigazione ─────────────────────────────────────────────────
-  const views = ['ricevuto', 'scadenze', 'aiuto'];
+  const views = ['ricevuto', 'scadenze', 'contratti', 'aiuto'];
   function show(view) {
     views.forEach((v) => ($('view-' + v).hidden = v !== view));
     document.querySelectorAll('.tabs button').forEach((b) => {
@@ -127,6 +133,7 @@
       else b.removeAttribute('aria-current');
     });
     if (view === 'scadenze') renderScadenze();
+    if (view === 'contratti') renderContratti();
     if (view === 'aiuto') renderAiuto();
     if (view === 'ricevuto') renderHome();
     window.scrollTo({ top: 0 });
@@ -468,6 +475,17 @@
       kids.push(btn, status);
     }
 
+    if (r.contratto && !isScam && !opts.note) {
+      const c = r.contratto;
+      const known = findContract(c.tipo, c.fornitore);
+      kids.push(
+        known
+          ? h('p', { class: 'added' }, 'È già fra i tuoi contratti ✓')
+          : h('button', { class: 'btn', type: 'button', onclick: () => openContractForm(Object.assign({ avviso: 30 }, c)) },
+              `Aggiungi ${c.fornitore} ai miei contratti`)
+      );
+    }
+
     const acts = [];
     if (canSpeak) acts.push(h('button', { class: 'btn', type: 'button', onclick: () => speak(speakText(r, showVerdict)) }, 'Leggimi ad alta voce'));
     acts.push(h('button', { class: 'btn', type: 'button', onclick: () => shareResult(r, showVerdict) }, 'Manda a un familiare'));
@@ -683,6 +701,334 @@
   }
   $('allIcs').addEventListener('click', () => downloadIcs(pending()));
 
+  // ── Contratti ───────────────────────────────────────────────────
+  const TIPI = [
+    ['Luce', '💡'], ['Gas', '🔥'], ['Acqua', '💧'], ['Internet e telefono di casa', '📶'], ['Cellulare', '📱'],
+    ['Assicurazione auto', '🚗'], ['Assicurazione casa', '🏠'], ['Altra assicurazione', '🛡️'],
+    ['Abbonamento TV', '📺'], ['Rifiuti', '♻️'], ['Altro', '📄'],
+  ];
+  const ICON = Object.fromEntries(TIPI);
+  const PERIODI = [['mese', 'al mese', 1], ['bimestre', 'ogni 2 mesi', 2], ['trimestre', 'ogni 3 mesi', 3], ['semestre', 'ogni 6 mesi', 6], ['anno', "all'anno", 12]];
+  const MESI = Object.fromEntries(PERIODI.map(([k, , m]) => [k, m]));
+  const PERIODO_LABEL = Object.fromEntries(PERIODI.map(([k, l]) => [k, l]));
+  const LETTERE = [
+    ['disdetta', 'Disdetta', 'Non voglio più il servizio'],
+    ['reclamo', 'Reclamo', 'Bolletta troppo alta, servizio che non funziona, addebito sbagliato'],
+    ['rimborso', 'Rimborso', 'Ho pagato qualcosa che non dovevo'],
+    ['ripensamento', 'Ripensamento', 'Ho firmato da meno di 14 giorni e ci ho ripensato'],
+  ];
+  const norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const findContract = (tipo, fornitore) => contratti.find((c) => c.tipo === tipo && norm(c.fornitore) === norm(fornitore));
+  const monthly = (c) => (c.costo ? c.costo / (MESI[c.periodicita] || 1) : 0);
+
+  function decideBy(c) {
+    if (!c.rinnovo) return null;
+    const d = parseIso(c.rinnovo);
+    d.setDate(d.getDate() - (Number(c.avviso) || 30));
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  const reminderOf = (c) => scadenze.find((s) => s.contrattoId === c.id && !s.fatta);
+
+  // modulo
+  $('cTipo').replaceChildren(...TIPI.map(([t, i]) => h('option', { value: t }, `${i} ${t}`)));
+  $('cPeriodo').replaceChildren(...PERIODI.map(([k, l]) => h('option', { value: k }, l)));
+
+  function openContractForm(c) {
+    c = c || {};
+    $('cId').value = c.id || '';
+    $('cTipo').value = c.tipo || 'Luce';
+    $('cFornitore').value = c.fornitore || '';
+    $('cCosto').value = c.costo ? String(c.costo).replace('.', ',') : '';
+    $('cPeriodo').value = c.periodicita || 'mese';
+    $('cRinnovo').value = c.rinnovo || '';
+    $('cAvviso').value = String(c.avviso || 30);
+    $('cCodice').value = c.codiceCliente || '';
+    $('contractFormTitle').textContent = c.id ? `Modifica: ${c.fornitore}` : 'Aggiungi un contratto';
+    $('cSave').textContent = c.id ? 'Salva le modifiche' : 'Salva il contratto';
+    $('cCancel').hidden = !c.id && !c.fornitore;
+    show('contratti');
+    $('contractBox').open = true;
+    $('contractBox').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!c.fornitore) $('cFornitore').focus();
+  }
+  function closeContractForm() {
+    $('contractForm').reset();
+    $('cId').value = '';
+    $('contractBox').open = false;
+    $('contractFormTitle').textContent = 'Aggiungi un contratto';
+    $('cSave').textContent = 'Salva il contratto';
+    $('cCancel').hidden = true;
+  }
+  $('cCancel').addEventListener('click', closeContractForm);
+
+  const parseEuro = (raw) => {
+    const t = String(raw || '').trim().replace(/\s|€/g, '');
+    if (!t) return null;
+    const n = Number(t.replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
+    return n > 0 ? Math.round(n * 100) / 100 : NaN;
+  };
+
+  $('contractForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fornitore = $('cFornitore').value.trim();
+    if (!fornitore) return;
+    const costo = parseEuro($('cCosto').value);
+    if (Number.isNaN(costo)) {
+      toast("Scrivi l'importo solo con numeri, per esempio 84,30.", true);
+      return;
+    }
+    const id = $('cId').value || uid();
+    const old = contratti.find((c) => c.id === id);
+    const c = {
+      id,
+      tipo: $('cTipo').value,
+      fornitore,
+      costo,
+      periodicita: $('cPeriodo').value,
+      rinnovo: $('cRinnovo').value || null,
+      avviso: Number($('cAvviso').value) || 30,
+      codiceCliente: $('cCodice').value.trim(),
+      creato: old ? old.creato : Date.now(),
+    };
+    contratti = old ? contratti.map((x) => (x.id === id ? c : x)) : [...contratti, c];
+    // se il promemoria del rinnovo c'era già, lo sposto sulla data nuova
+    const rem = reminderOf(c);
+    if (rem) {
+      const by = decideBy(c);
+      if (by) {
+        rem.data = by;
+        rem.cosa = `Decidere se rinnovare: ${c.tipo} ${c.fornitore}`.slice(0, 80);
+      } else scadenze = scadenze.filter((s) => s !== rem);
+      saveScadenze();
+    }
+    saveContratti();
+    closeContractForm();
+    renderContratti();
+    toast(old ? 'Contratto aggiornato ✓' : 'Contratto aggiunto ✓');
+  });
+
+  function remindRenewal(c) {
+    const by = decideBy(c);
+    if (!by || reminderOf(c)) return;
+    scadenze.push({
+      id: uid(),
+      cosa: `Decidere se rinnovare: ${c.tipo} ${c.fornitore}`.slice(0, 80),
+      data: by,
+      importo: null,
+      fatta: false,
+      creata: Date.now(),
+      fonte: 'Contratto',
+      contrattoId: c.id,
+    });
+    saveScadenze();
+    updateDue();
+    renderContratti();
+    toast(`Te lo ricordo il ${fmtDay(by)}: lo trovi nelle Scadenze.`);
+  }
+
+  function removeContract(c) {
+    if (!window.confirm(`Togliere ${c.fornitore} dai contratti?`)) return;
+    contratti = contratti.filter((x) => x.id !== c.id);
+    scadenze = scadenze.filter((s) => !(s.contrattoId === c.id && !s.fatta));
+    saveContratti();
+    saveScadenze();
+    updateDue();
+    renderContratti();
+  }
+
+  function renderContratti() {
+    const withCost = contratti.filter((c) => c.costo);
+    const perMese = withCost.reduce((a, c) => a + monthly(c), 0);
+    const tot = $('totals');
+    tot.hidden = !withCost.length;
+    if (withCost.length) {
+      const top = [...withCost].sort((a, b) => monthly(b) - monthly(a))[0];
+      tot.replaceChildren(
+        h('p', null, 'Per questi contratti spendi circa'),
+        h('p', { class: 'big' }, `${fmtEuro(perMese)} al mese`),
+        h('p', null, `cioè ${fmtEuro(perMese * 12)} all'anno.`),
+        withCost.length > 1 ? h('p', { class: 'muted' }, `Il più caro: ${top.tipo} con ${top.fornitore}, circa ${fmtEuro(monthly(top))} al mese.`) : null
+      );
+    }
+
+    const list = [...contratti].sort((a, b) => (decideBy(a) || '9999').localeCompare(decideBy(b) || '9999') || a.tipo.localeCompare(b.tipo));
+    if (!list.length) {
+      $('contractList').replaceChildren(
+        h('p', { class: 'empty' }, 'Nessun contratto ancora. Aggiungi luce, gas, telefono e assicurazioni: vedrai quanto spendi in tutto e ti ricorderò i rinnovi. Quando mi fai leggere una bolletta, te lo propongo io.')
+      );
+      return;
+    }
+    $('contractList').replaceChildren(h('ul', { class: 'contracts' }, list.map(contractView)));
+  }
+
+  function contractView(c) {
+    const by = decideBy(c);
+    const daysBy = by ? daysUntil(by) : null;
+    const daysRenew = c.rinnovo ? daysUntil(c.rinnovo) : null;
+    let renew = null;
+    let warn = false;
+    if (c.rinnovo) {
+      if (daysRenew < 0) {
+        renew = `La data di rinnovo (${fmtDay(c.rinnovo)}) è passata: aggiorna la prossima.`;
+        warn = true;
+      } else if (daysBy < 0) {
+        renew = `Si rinnova il ${fmtDay(c.rinnovo)}. Il tempo per disdire potrebbe essere passato: controlla il contratto.`;
+        warn = true;
+      } else {
+        renew = `Si rinnova il ${fmtDay(c.rinnovo)}. Per decidere hai tempo fino al ${fmtDay(by)} (${daysLabel(daysBy).toLowerCase()}).`;
+        warn = daysBy <= 30;
+      }
+    }
+    const panel = h('div', { class: 'letter-panel', hidden: true });
+    const rem = reminderOf(c);
+    const acts = [
+      h('button', { class: 'btn primary', type: 'button', onclick: () => toggleLetter(c, panel) }, 'Scrivi una lettera'),
+      c.rinnovo && daysRenew >= 0 && daysBy >= 0
+        ? rem
+          ? h('span', { class: 'added' }, 'Promemoria messo ✓')
+          : h('button', { class: 'btn', type: 'button', onclick: () => remindRenewal(c) }, 'Ricordami il rinnovo')
+        : null,
+      h('button', { class: 'btn', type: 'button', onclick: () => openContractForm(c) }, 'Modifica'),
+      h('button', { class: 'link remove', type: 'button', onclick: () => removeContract(c) }, 'Togli dalla lista'),
+    ];
+    return h('li', { class: 'contract' + (warn ? ' warn' : '') },
+      h('div', { class: 'head' },
+        h('span', { class: 'ico', 'aria-hidden': 'true' }, ICON[c.tipo] || '📄'),
+        h('div', null, h('div', { class: 'kind2' }, c.tipo), h('div', { class: 'who' }, c.fornitore))),
+      c.costo
+        ? h('div', { class: 'cost' }, `${fmtEuro(c.costo)} ${PERIODO_LABEL[c.periodicita] || ''}` + (c.periodicita !== 'mese' ? ` · circa ${fmtEuro(monthly(c))} al mese` : ''))
+        : h('div', { class: 'muted' }, 'Costo non indicato'),
+      renew ? h('p', { class: 'renew' + (warn ? ' warn' : '') }, renew) : null,
+      h('div', { class: 'acts' }, acts),
+      panel);
+  }
+
+  // ── Lettere ─────────────────────────────────────────────────────
+  function toggleLetter(c, panel) {
+    if (!panel.hidden) {
+      panel.hidden = true;
+      return;
+    }
+    const name = 'lt-' + c.id;
+    const choices = LETTERE.map(([k, t, d], i) =>
+      h('label', { class: 'choice' }, h('input', { type: 'radio', name, value: k, checked: i === 0 }), h('div', null, h('b', null, t), h('span', null, d))));
+    const note = h('textarea', { rows: 3, placeholder: 'Facoltativo: cosa è successo, con le tue parole (date, importi, cosa vuoi ottenere)' });
+    const out = h('div', { 'aria-live': 'polite' });
+    const go = h('button', { class: 'btn primary', type: 'button' }, 'Scrivi la lettera');
+    go.addEventListener('click', async () => {
+      const tipo = panel.querySelector(`input[name="${name}"]:checked`).value;
+      if (invitato === false) {
+        out.replaceChildren(h('p', { class: 'toast bad' }, "Per scrivere le lettere serve il link d'invito."));
+        return;
+      }
+      if (!navigator.onLine) {
+        out.replaceChildren(h('p', { class: 'toast bad' }, 'Serve internet per scrivere la lettera.'));
+        return;
+      }
+      go.disabled = true;
+      const txt = h('span', null, 'Sto scrivendo la lettera…');
+      out.replaceChildren(h('div', { class: 'loading' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), txt));
+      const slow = setTimeout(() => (txt.textContent = 'Ci sto mettendo un po’: la prima volta della giornata può volerci fino a un minuto.'), 8000);
+      // al server vanno solo tipo di contratto e fornitore: nome, indirizzo e codice cliente restano qui
+      const res = await api('/api/lettera', { tipo, contratto: { tipo: c.tipo, fornitore: c.fornitore }, dettagli: note.value.trim(), oggi: todayIso() });
+      clearTimeout(slow);
+      go.disabled = false;
+      if (res.ok && res.data.lettera) {
+        if (res.data.letture) server.letture = res.data.letture;
+        out.replaceChildren(letterView(res.data.lettera, c, tipo));
+      } else {
+        if (res.status === 401 && res.data.code === 'invito') setInvitato(false);
+        out.replaceChildren(h('p', { class: 'toast bad' }, res.data.error || 'Non sono riuscito a scrivere la lettera.'));
+      }
+    });
+    panel.replaceChildren(h('p', { class: 'label' }, 'Che lettera vuoi mandare a ' + c.fornitore + '?'), h('div', { class: 'choices' }, choices), note, go, out);
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function fillLetter(text, c) {
+    const today = parseIso(todayIso()).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+    let t = String(text);
+    if (me.nome) t = t.split('[Nome e Cognome]').join(me.nome);
+    if (me.indirizzo) t = t.split('[Indirizzo]').join(me.indirizzo);
+    if (c.codiceCliente) t = t.split('[Codice cliente]').join(c.codiceCliente);
+    t = t.split('[Luogo e data]').join(`${me.citta || '[Luogo]'}, ${today}`);
+    return t;
+  }
+
+  function letterView(l, c, tipo) {
+    const text = fillLetter(l.testo, c);
+    const missing = Array.from(new Set(text.match(/\[[^\]\n]{2,40}\]/g) || []));
+    const box = h('div', { class: 'letter' });
+    // i segnaposto rimasti si vedono evidenziati
+    let last = 0;
+    text.replace(/\[[^\]\n]{2,40}\]/g, (m, i) => {
+      box.append(text.slice(last, i), h('mark', null, m));
+      last = i + m.length;
+      return m;
+    });
+    box.append(text.slice(last));
+    const full = (l.oggetto ? `Oggetto: ${l.oggetto}\n\n` : '') + text;
+    const parts = [];
+    if (l.oggetto) parts.push(h('p', null, h('b', null, 'Oggetto: '), l.oggetto));
+    parts.push(box);
+    if (missing.length) {
+      parts.push(h('p', { class: 'fallback' }, `Completa le parti evidenziate: ${missing.join(', ')}.` + (!me.nome ? ' Puoi salvare nome e indirizzo in Aiuto: li metto io la prossima volta.' : '')));
+    }
+    parts.push(
+      h('div', { class: 'row' },
+        h('button', { class: 'btn', type: 'button', onclick: () => copyText(full) }, 'Copia la lettera'),
+        h('button', { class: 'btn', type: 'button', onclick: () => shareText(l.oggetto || 'Lettera', full) }, 'Mandala o salvala'))
+    );
+    if (l.come_mandarla.length) parts.push(h('p', { class: 'label' }, 'Come mandarla'), h('ol', { class: 'steps' }, l.come_mandarla.map((x) => h('li', null, x))));
+    if (l.attenzione) parts.push(h('p', { class: 'fallback' }, '⚠️ ' + l.attenzione));
+    return h('div', { class: 'form' }, parts);
+  }
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('Copiata! Ora puoi incollarla nella email o nella PEC.');
+    } catch (e) {
+      downloadText(text);
+    }
+  }
+  async function shareText(title, text) {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+    downloadText(text);
+  }
+  function downloadText(text) {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const a = h('a', { href: URL.createObjectURL(blob), download: `lettera-${todayIso()}.txt` });
+    document.body.append(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(a.href);
+      a.remove();
+    }, 2000);
+    toast('Lettera salvata nei download del telefono ✓');
+  }
+
+  // ── I miei dati per le lettere ──────────────────────────────────
+  function fillMeForm() {
+    $('meNome').value = me.nome;
+    $('meIndirizzo').value = me.indirizzo;
+    $('meCitta').value = me.citta;
+  }
+  $('meForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    me = { nome: $('meNome').value.trim(), indirizzo: $('meIndirizzo').value.trim(), citta: $('meCitta').value.trim() };
+    save(KEYS.mittente, me);
+    toast('Salvati sul telefono ✓ Li metto io nelle lettere.');
+  });
+
   // ── Aiuto: installazione, invito, dati ───────────────────────────
   let installEvent = null;
   window.addEventListener('beforeinstallprompt', (e) => {
@@ -704,6 +1050,7 @@
   });
 
   function renderAiuto() {
+    fillMeForm();
     const t = $('installText');
     $('installBtn').hidden = true;
     if (isStandalone()) t.textContent = "L'app è già installata su questo telefono ✓";
@@ -757,7 +1104,7 @@
   }
 
   $('exportBtn').addEventListener('click', () => {
-    const data = { app: 'carte-di-casa', versione: 1, salvatoIl: new Date().toISOString(), scadenze, storico, impostazioni: settings };
+    const data = { app: 'carte-di-casa', versione: 2, salvatoIl: new Date().toISOString(), scadenze, storico, contratti, mittente: me, impostazioni: settings };
     const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
     const a = h('a', { href: URL.createObjectURL(blob), download: `carte-di-casa-copia-${todayIso()}.json` });
     document.body.append(a);
@@ -779,6 +1126,16 @@
       const byId = new Map(scadenze.map((s) => [s.id, s]));
       data.scadenze.filter((s) => s && s.id && /^\d{4}-\d{2}-\d{2}$/.test(s.data) && s.cosa).forEach((s) => byId.set(s.id, s));
       scadenze = Array.from(byId.values());
+      if (Array.isArray(data.contratti)) {
+        const byC = new Map(contratti.map((c) => [c.id, c]));
+        data.contratti.filter((c) => c && c.id && c.fornitore).forEach((c) => byC.set(c.id, c));
+        contratti = Array.from(byC.values());
+        saveContratti();
+      }
+      if (data.mittente && typeof data.mittente === 'object' && !me.nome) {
+        me = Object.assign({ nome: '', indirizzo: '', citta: '' }, data.mittente);
+        save(KEYS.mittente, me);
+      }
       if (Array.isArray(data.storico)) {
         const known = new Set(storico.map((s) => s.id));
         storico = storico.concat(data.storico.filter((s) => s && s.id && s.r && !known.has(s.id))).sort((a, b) => b.at - a.at).slice(0, 30);
@@ -787,18 +1144,23 @@
       saveStorico();
       renderHistory();
       updateDue();
-      toast('Copia ripresa ✓ Ritrovi le tue scadenze.');
+      toast('Copia ripresa ✓ Ritrovi scadenze e contratti.');
     } catch (err) {
       toast('Questo file non è una copia di Carte di Casa.', true);
     }
   });
 
   $('wipeBtn').addEventListener('click', () => {
-    if (!window.confirm('Cancellare da questo telefono tutte le scadenze e le cose lette? Non si può tornare indietro.')) return;
+    if (!window.confirm('Cancellare da questo telefono scadenze, contratti, i tuoi dati e le cose lette? Non si può tornare indietro.')) return;
     scadenze = [];
     storico = [];
+    contratti = [];
+    me = { nome: '', indirizzo: '', citta: '' };
     saveScadenze();
     saveStorico();
+    saveContratti();
+    save(KEYS.mittente, me);
+    fillMeForm();
     renderHistory();
     updateDue();
     toast('Fatto: questo telefono è pulito.');
@@ -831,6 +1193,14 @@
   window.addEventListener('online', refreshStatus);
 
   if ('serviceWorker' in navigator) {
+    // quando arriva una versione nuova dell'app, la pagina si ricarica da sola una volta
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloaded || busy) return;
+      reloaded = true;
+      location.reload();
+    });
     window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
   }
 })();

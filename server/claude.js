@@ -40,7 +40,22 @@ Regole:
 - Anche un documento che sembra vero può essere una truffa (finta bolletta, finta PEC, finto avviso): valuta sempre.
 - Non dire mai di pagare o cliccare un link contenuto in un messaggio sospetto: suggerisci di verificare dal sito o dall'app ufficiale, o chiamando il numero scritto sulla carta o sul contratto.`;
 
-const SCHEMA = `Rispondi SOLO con un oggetto JSON, senza testo prima o dopo:
+export const TIPI_CONTRATTO = [
+  'Luce',
+  'Gas',
+  'Acqua',
+  'Internet e telefono di casa',
+  'Cellulare',
+  'Assicurazione auto',
+  'Assicurazione casa',
+  'Altra assicurazione',
+  'Abbonamento TV',
+  'Rifiuti',
+  'Altro',
+];
+export const PERIODI = ['mese', 'bimestre', 'trimestre', 'semestre', 'anno'];
+
+const SCHEMA_TEMPLATE = `Rispondi SOLO con un oggetto JSON, senza testo prima o dopo:
 {
   "tipo": "documento" oppure "messaggio",
   "categoria": "es. Bolletta della luce, Bolletta del gas, PEC, Raccomandata, Cartella esattoriale, Multa, Avviso INPS, Contratto, SMS, Email, WhatsApp",
@@ -56,10 +71,20 @@ const SCHEMA = `Rispondi SOLO con un oggetto JSON, senza testo prima o dopo:
     "verdetto": "truffa" oppure "sospetto" oppure "sicuro",
     "segnali": [{"titolo": "massimo 6 parole", "spiegazione": "una frase semplice"}]
   },
-  "risposta": "solo per un messaggio sospetto di un presunto parente o conoscente: una breve risposta sicura per verificare; altrimenti stringa vuota"
+  "risposta": "solo per un messaggio sospetto di un presunto parente o conoscente: una breve risposta sicura per verificare; altrimenti stringa vuota",
+  "contratto": null oppure {
+    "tipo": uno fra "TIPI_CONTRATTO",
+    "fornitore": "nome della ditta",
+    "costo": numero in euro per il periodo della bolletta o della rata, oppure null,
+    "periodicita": "mese" oppure "bimestre" oppure "trimestre" oppure "semestre" oppure "anno",
+    "rinnovo": "AAAA-MM-GG se c'è scritta la data di scadenza o rinnovo del contratto o della polizza" oppure null
+  }
 }
 In "scadenze" metti ogni data utile (per esempio le rate); se è una truffa lasciala vuota.
-In "segnali" metti i segnali di truffa trovati; se è "sicuro", al massimo un segnale rassicurante o nessuno.`;
+In "segnali" metti i segnali di truffa trovati; se è "sicuro", al massimo un segnale rassicurante o nessuno.
+Compila "contratto" solo per bollette, contratti, polizze o abbonamenti veri di un servizio che si paga in modo ricorrente; altrimenti null.`;
+
+const SCHEMA = SCHEMA_TEMPLATE.replace('"TIPI_CONTRATTO"', TIPI_CONTRATTO.map((t) => `"${t}"`).join(', '));
 
 /** Estrae il primo oggetto JSON da una risposta (tollera ```json … ``` e testo attorno). */
 export function extractJson(text) {
@@ -139,6 +164,20 @@ export function cleanResult(raw) {
     scadenze,
     truffa: { verdetto, segnali },
     risposta: str(raw?.risposta, 400),
+    contratto: verdetto === 'truffa' ? null : cleanContract(raw?.contratto),
+  };
+}
+
+function cleanContract(c) {
+  if (!c || typeof c !== 'object') return null;
+  const fornitore = str(c.fornitore, 60);
+  if (!fornitore) return null;
+  return {
+    tipo: oneOf(c.tipo, TIPI_CONTRATTO, 'Altro'),
+    fornitore,
+    costo: euro(c.costo),
+    periodicita: oneOf(c.periodicita, PERIODI, 'mese'),
+    rinnovo: isoDate(c.rinnovo),
   };
 }
 
@@ -170,23 +209,7 @@ export async function readDocument({ testo = '', file = null, oggi }) {
   const note = testo && file ? `\nCi ha scritto anche:\n"""\n${testo}\n"""` : testo ? `\n"""\n${testo}\n"""` : '';
   content.push({ type: 'text', text: `Spiegami ${what}.${note}\n\n${SCHEMA}` });
 
-  let text;
-  try {
-    const response = await getClient().messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 1500,
-      system: SYSTEM(oggi),
-      messages: [{ role: 'user', content }],
-    });
-    text = response.content
-      .filter((b) => b.type === 'text')
-      .map((b) => b.text)
-      .join('')
-      .trim();
-  } catch (error) {
-    console.error('Errore Claude:', error?.status || '', error?.message || error);
-    throw friendly(error);
-  }
+  const text = await ask(SYSTEM(oggi), content, 1700);
 
   try {
     return cleanResult(extractJson(text));
@@ -195,3 +218,77 @@ export async function readDocument({ testo = '', file = null, oggi }) {
     throw new ReadError('Non sono riuscito a capire bene il documento: riprova, magari con una foto più nitida.', 502);
   }
 }
+
+/** Una chiamata a Claude: restituisce il testo della risposta. */
+async function ask(system, content, maxTokens) {
+  try {
+    const response = await getClient().messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: 'user', content }],
+    });
+    return response.content
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text)
+      .join('')
+      .trim();
+  } catch (error) {
+    console.error('Errore Claude:', error?.status || '', error?.message || error);
+    throw friendly(error);
+  }
+}
+
+// ── Lettere per i contratti ────────────────────────────────────────
+
+export const LETTERE = {
+  disdetta: 'Disdetta del contratto (non voglio più il servizio)',
+  reclamo: 'Reclamo (qualcosa non va: bolletta troppo alta, servizio che non funziona, addebito sbagliato)',
+  rimborso: 'Richiesta di rimborso di una somma pagata e non dovuta',
+  ripensamento: 'Ripensamento: recesso da un contratto appena firmato, entro 14 giorni',
+};
+
+const LETTER_SYSTEM = (oggi) => `Scrivi lettere formali in italiano per consumatori comuni che devono scrivere a un fornitore di servizi (luce, gas, acqua, telefono, internet, assicurazioni, abbonamenti).
+Tono cortese ma fermo, frasi chiare, niente giri di parole. Oggi è ${oggi}.
+Regole:
+- Per i dati personali usa SOLO questi segnaposto, scritti esattamente così: [Nome e Cognome], [Indirizzo], [Codice cliente], [Luogo e data]. Non inventarli mai.
+- Non inventare indirizzi, PEC, numeri di telefono, numeri di pratica o importi che non ti ho dato. Non citare articoli di legge precisi se non sei sicuro: puoi richiamare in modo generico "il Codice del Consumo".
+- Non promettere un risultato: la lettera chiede, non minaccia.
+- La lettera è completa: luogo e data, mittente, destinatario (il fornitore, senza indirizzo inventato: scrivi "Spett.le" e il nome), oggetto, testo, saluti, firma.`;
+
+export async function writeLetter({ tipoLettera, contratto, dettagli, oggi }) {
+  if (!isClaudeConfigured()) throw new ReadError('Il servizio non è ancora configurato.', 503);
+  const prompt = `Tipo di lettera: ${LETTERE[tipoLettera]}
+Contratto: ${contratto.tipo} con ${contratto.fornitore}
+Cosa mi è successo o cosa voglio (scritto da me, può essere vuoto):
+"""
+${dettagli || '(niente da aggiungere)'}
+"""
+
+Rispondi SOLO con un oggetto JSON:
+{
+  "oggetto": "l'oggetto della lettera, una riga",
+  "testo": "la lettera completa, con a capo veri (\\n)",
+  "come_mandarla": ["da 2 a 4 passi semplici: come e a chi mandarla (PEC, raccomandata con ricevuta di ritorno, area clienti), dicendo dove trovare l'indirizzo giusto (bolletta, contratto, sito del fornitore)"],
+  "attenzione": "una frase su cosa controllare prima di mandarla (per esempio un termine di preavviso scritto nel contratto), oppure stringa vuota"
+}`;
+  const text = await ask(LETTER_SYSTEM(oggi), [{ type: 'text', text: prompt }], 1800);
+  try {
+    const out = extractJson(text);
+    const testo = typeof out?.testo === 'string' ? mask(out.testo.trim()).slice(0, 6000) : '';
+    if (testo.length < 80) throw new Error('lettera vuota');
+    return {
+      oggetto: str(out?.oggetto, 200),
+      testo,
+      come_mandarla: (Array.isArray(out?.come_mandarla) ? out.come_mandarla : [])
+        .map((x) => str(x, 240))
+        .filter(Boolean)
+        .slice(0, 5),
+      attenzione: str(out?.attenzione, 300),
+    };
+  } catch {
+    console.error('Lettera di Claude non leggibile');
+    throw new ReadError('Non sono riuscito a scrivere la lettera: riprova fra poco.', 502);
+  }
+}
+

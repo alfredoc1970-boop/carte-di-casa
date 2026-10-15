@@ -96,6 +96,42 @@
       </details>
     </section>
 
+    <!-- ── Contratti ── -->
+    <section class="view" id="view-contratti" hidden aria-labelledby="t-contratti">
+      <h1 id="t-contratti">I miei contratti</h1>
+      <div class="card total" id="totals" hidden></div>
+      <div id="contractList"></div>
+      <details class="card" id="contractBox">
+        <summary id="contractFormTitle">Aggiungi un contratto</summary>
+        <form id="contractForm" class="form">
+          <input type="hidden" id="cId">
+          <label class="label" for="cTipo">Che contratto è</label>
+          <select id="cTipo"></select>
+          <label class="label" for="cFornitore">Con chi (il fornitore)</label>
+          <input id="cFornitore" required maxlength="60" placeholder="Es. Enel, Tim, Unipol">
+          <label class="label" for="cCosto">Quanto paghi</label>
+          <div class="pair">
+            <input id="cCosto" inputmode="decimal" placeholder="Es. 84,30" aria-label="Importo in euro">
+            <select id="cPeriodo" aria-label="Ogni quanto"></select>
+          </div>
+          <label class="label" for="cRinnovo">Quando scade o si rinnova (se lo sai)</label>
+          <input id="cRinnovo" type="date">
+          <label class="label" for="cAvviso">Avvisami prima del rinnovo</label>
+          <select id="cAvviso">
+            <option value="15">15 giorni prima</option>
+            <option value="30" selected>30 giorni prima</option>
+            <option value="60">60 giorni prima</option>
+            <option value="90">90 giorni prima</option>
+          </select>
+          <label class="label" for="cCodice">Codice cliente o numero di polizza (facoltativo)</label>
+          <input id="cCodice" maxlength="40" autocomplete="off" spellcheck="false">
+          <p class="muted small">Resta solo su questo telefono: serve per completare le lettere.</p>
+          <button class="btn primary" type="submit" id="cSave">Salva il contratto</button>
+          <button class="link" type="button" id="cCancel" hidden>Annulla</button>
+        </form>
+      </details>
+    </section>
+
     <!-- ── Aiuto ── -->
     <section class="view" id="view-aiuto" hidden aria-labelledby="t-aiuto">
       <h1 id="t-aiuto">Aiuto</h1>
@@ -117,8 +153,22 @@
       </div>
 
       <div class="card">
+        <h2>I tuoi dati per le lettere</h2>
+        <p class="muted">Restano solo su questo telefono. Li metto io nella lettera dopo che è stata scritta, così non viaggiano mai.</p>
+        <form id="meForm" class="form">
+          <label class="label" for="meNome">Nome e cognome</label>
+          <input id="meNome" maxlength="80" autocomplete="name">
+          <label class="label" for="meIndirizzo">Indirizzo (via, numero, CAP e città)</label>
+          <input id="meIndirizzo" maxlength="160" autocomplete="street-address">
+          <label class="label" for="meCitta">Città (per "luogo e data")</label>
+          <input id="meCitta" maxlength="60" autocomplete="address-level2">
+          <button class="btn" type="submit">Salva i miei dati</button>
+        </form>
+      </div>
+
+      <div class="card">
         <h2>I tuoi dati</h2>
-        <p>Le scadenze e le cose lette restano <strong>solo su questo telefono</strong>. Le foto e i testi che mi fai leggere passano da Claude, l'intelligenza artificiale che li spiega, e non vengono salvati da nessuna parte.</p>
+        <p>Scadenze, contratti e cose lette restano <strong>solo su questo telefono</strong>. Le foto e i testi che mi fai leggere passano da Claude, l'intelligenza artificiale che li spiega, e non vengono salvati da nessuna parte.</p>
         <p class="muted">Se cambi telefono, salva prima una copia e poi aprila sul telefono nuovo.</p>
         <div class="row">
           <button class="btn" id="exportBtn" type="button">Salva una copia</button>
@@ -155,6 +205,7 @@
   <nav class="tabs" aria-label="Sezioni">
     <button type="button" data-view="ricevuto" aria-current="page"><span aria-hidden="true">✉️</span>Ho ricevuto</button>
     <button type="button" data-view="scadenze"><span aria-hidden="true">📅</span>Scadenze<b class="badge" id="badge" hidden></b></button>
+    <button type="button" data-view="contratti"><span aria-hidden="true">📄</span>Contratti</button>
     <button type="button" data-view="aiuto"><span aria-hidden="true">❓</span>Aiuto</button>
   </nav>
 

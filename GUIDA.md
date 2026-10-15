@@ -4,9 +4,10 @@ Bollette, lettere, PEC, cartelle e messaggi spiegati in parole semplici, con le 
 
 - **Ho ricevuto qualcosa**: si fa una foto, si sceglie un PDF o si incolla un messaggio. L'app dice cos'è, quanto c'è da pagare, entro quando e cosa fare, e se è una truffa.
 - **Scadenze**: le date trovate finiscono in una lista con un tocco, con i colori e il promemoria nel calendario del telefono (tre giorni prima e il giorno prima).
+- **Contratti**: luce, gas, telefono, assicurazioni e abbonamenti, con quanto si spende al mese e all'anno, il promemoria prima del rinnovo e la lettera pronta (disdetta, reclamo, rimborso, ripensamento). Quando si legge una bolletta, l'app propone di aggiungerla ai contratti.
 - **Aiuto**: testo grande, installazione, copia dei dati, cosa fare se si è già cliccato.
 
-**Dove stanno i dati.** Scadenze e storico restano solo sul telefono di chi usa l'app. Il server non ha un database: riceve la foto o il testo, li passa a Claude, restituisce la spiegazione e non salva niente. Il controllo veloce dei messaggi funziona anche senza internet e senza invito.
+**Dove stanno i dati.** Scadenze, contratti e storico restano solo sul telefono di chi usa l'app. Il server non ha un database: riceve la foto o il testo, li passa a Claude, restituisce la spiegazione e non salva niente. Il controllo veloce dei messaggi funziona anche senza internet e senza invito.
 
 ## 1. Metterla online su Render (5 minuti)
 1. Su GitHub il codice sta nel repository privato `carte-di-casa`.
@@ -43,6 +44,8 @@ INVITI=Alfredo:mela-verde-2731, Rosa:sole-alto-9048
 - **Modello**: quello predefinito è `claude-sonnet-5-5`, il più capace nel leggere le foto. Per spendere meno aggiungi su Render `CLAUDE_MODEL` con un modello più leggero.
 - **Foto**: vengono rimpicciolite sul telefono prima di partire, così viaggiano veloci. PDF fino a 6 MB.
 - **Dati sensibili**: Claude riceve la foto o il testo per spiegarli. Nella risposta codice fiscale e IBAN vengono oscurati.
+- **Lettere**: a Claude arrivano solo il tipo di contratto, il nome del fornitore e quello che si scrive nel riquadro. Nome, indirizzo e codice cliente stanno solo sul telefono (in **Aiuto → I tuoi dati per le lettere** e nel contratto) e l'app li inserisce nella lettera dopo che è arrivata. Ogni lettera conta come una lettura nel limite giornaliero.
+- **Aggiornamenti**: quando pubblichi una versione nuova, l'app installata si aggiorna da sola alla prima apertura (si ricarica una volta).
 - **Cambio telefono**: in **Aiuto → Salva una copia** si scarica un file con scadenze e storico; sul telefono nuovo **Riprendi da una copia**.
 - **Se qualcosa non va**: su Render, scheda **Logs**. Il server non scrive mai il contenuto dei documenti nei log.
 

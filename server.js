@@ -9,7 +9,15 @@ import {
   setInviteCookie,
   clearInviteCookie,
 } from './server/inviti.js';
-import { readDocument, isClaudeConfigured, ReadError, IMAGE_TYPES } from './server/claude.js';
+import {
+  readDocument,
+  writeLetter,
+  isClaudeConfigured,
+  ReadError,
+  IMAGE_TYPES,
+  LETTERE,
+  TIPI_CONTRATTO,
+} from './server/claude.js';
 import { takeQuota, giveBackQuota, quotaLeft, dailyLimit, tooManyFailures, recordFailure } from './server/limiti.js';
 
 dotenv.config();
@@ -120,6 +128,40 @@ app.post('/api/leggi', async (req, res) => {
   try {
     const risultato = await readDocument({ testo, file, oggi });
     res.json({ risultato, letture: { rimaste: quota.left, giorno: quota.limit } });
+  } catch (err) {
+    giveBackQuota(inv.name);
+    const status = err instanceof ReadError ? err.status : 500;
+    res.status(status).json({ error: err instanceof ReadError ? err.message : 'Qualcosa non ha funzionato: riprova.' });
+  }
+});
+
+// Lettera per un contratto: disdetta, reclamo, rimborso, ripensamento.
+// I dati personali NON arrivano qui: la lettera torna con i segnaposto e il telefono li riempie.
+app.post('/api/lettera', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const inv = inviteFromRequest(req);
+  if (!inv) {
+    return res.status(401).json({ error: "Per scrivere le lettere serve il link d'invito.", code: 'invito' });
+  }
+  const body = req.body || {};
+  const tipoLettera = String(body.tipo || '');
+  if (!LETTERE[tipoLettera]) return res.status(400).json({ error: 'Scegli che lettera vuoi scrivere.' });
+  const c = body.contratto && typeof body.contratto === 'object' ? body.contratto : {};
+  const fornitore = typeof c.fornitore === 'string' ? c.fornitore.trim().slice(0, 60) : '';
+  if (!fornitore) return res.status(400).json({ error: 'Manca il nome del fornitore.' });
+  const contratto = { tipo: TIPI_CONTRATTO.includes(c.tipo) ? c.tipo : 'Altro', fornitore };
+  const dettagli = typeof body.dettagli === 'string' ? body.dettagli.trim().slice(0, 1500) : '';
+  const oggi = /^\d{4}-\d{2}-\d{2}$/.test(String(body.oggi || '')) ? body.oggi : new Date().toISOString().slice(0, 10);
+
+  const quota = takeQuota(inv.name);
+  if (!quota.ok) {
+    return res
+      .status(429)
+      .json({ error: `Per oggi hai usato tutte le ${quota.limit} richieste. Domani si ricomincia.`, code: 'limite' });
+  }
+  try {
+    const lettera = await writeLetter({ tipoLettera, contratto, dettagli, oggi });
+    res.json({ lettera, letture: { rimaste: quota.left, giorno: quota.limit } });
   } catch (err) {
     giveBackQuota(inv.name);
     const status = err instanceof ReadError ? err.status : 500;

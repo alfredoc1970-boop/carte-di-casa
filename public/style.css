@@ -74,7 +74,7 @@ p { margin: 0; }
 .or { text-align: center; color: var(--muted); font-weight: 700; }
 
 /* ── Campi e pulsanti ── */
-textarea, input:not([type=file]) {
+textarea, select, input:not([type=file]) {
   width: 100%; font: inherit; color: var(--ink); background: var(--field);
   border: 3px solid var(--line); border-radius: 14px; padding: 14px;
 }
@@ -228,13 +228,13 @@ a { color: var(--accent); }
 /* ── Barra in basso ── */
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  display: grid; grid-template-columns: repeat(4, 1fr);
   background: var(--panel); border-top: 2px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .tabs button {
   position: relative;
-  font: inherit; font-size: .8em; font-weight: 700; color: var(--muted);
+  font: inherit; font-size: 15px; font-weight: 700; color: var(--muted); line-height: 1.15; padding: 0 2px;
   background: none; border: none; cursor: pointer; min-height: 72px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
 }
@@ -245,3 +245,39 @@ a { color: var(--accent); }
   background: #D32F2F; color: #fff; border-radius: 999px; min-width: 1.6em; padding: 0 6px;
   font-size: .8em; line-height: 1.6em;
 }
+
+/* ── Contratti ── */
+select { appearance: auto; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.small { font-size: .8em; }
+.total { background: var(--accent-soft); border-color: var(--accent); }
+.total .big { font-size: 1.6em; font-weight: 700; line-height: 1.1; }
+.contracts { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.contract { background: var(--panel); border: 2px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 10px; }
+.contract.warn { border-color: #F2A900; }
+.contract .head { display: flex; gap: 12px; align-items: flex-start; }
+.contract .ico { font-size: 1.6em; line-height: 1; }
+.contract .who { font-weight: 700; font-size: 1.1em; overflow-wrap: anywhere; }
+.contract .kind2 { font-size: .85em; color: var(--muted); font-weight: 700; }
+.contract .cost { font-weight: 700; }
+.contract .renew { font-size: .9em; }
+.contract .renew.warn { color: var(--warn); font-weight: 700; }
+.contract .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.contract .acts .btn { flex: 1 1 150px; }
+.contract .acts .remove { flex: 1 1 100%; text-align: right; color: var(--muted); font-size: .85em; padding: 4px 0; min-height: 40px; }
+.letter-panel { border-top: 2px solid var(--line); padding-top: 12px; display: grid; gap: 10px; }
+.choices { display: grid; gap: 8px; }
+.choice {
+  display: flex; gap: 12px; align-items: flex-start; cursor: pointer;
+  border: 2px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--panel);
+}
+.choice input { width: 24px; height: 24px; margin-top: 2px; flex: none; accent-color: var(--accent); }
+.choice b { display: block; }
+.choice span { font-size: .85em; color: var(--muted); }
+.choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.letter {
+  white-space: pre-wrap; overflow-wrap: anywhere; font-family: Georgia, "Times New Roman", serif; font-size: .9em;
+  background: var(--field); border: 2px solid var(--line); border-radius: 14px; padding: 16px;
+}
+.letter mark { background: var(--mark); color: var(--ink); border-radius: 4px; padding: 0 2px; }
+.steps { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }

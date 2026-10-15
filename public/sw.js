@@ -1,10 +1,14 @@
 /* Carte di Casa: l'app si apre subito anche quando il server dorme o manca internet.
    I file dell'app stanno in cache; /api e /entra vanno sempre in rete. */
-const VERSION = 'cdc-v1';
+const VERSION = 'cdc-v2';
 const SHELL = ['/', '/index.html', '/style.css', '/app.js', '/regole.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(VERSION)
+      .then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {
