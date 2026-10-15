@@ -54,6 +54,8 @@ app.get('/api/stato', (req, res) => {
     nome: inv?.name || '',
     letture: inv ? { rimaste: quotaLeft(inv.name), giorno: dailyLimit() } : null,
     servizio: isClaudeConfigured() && invitesConfigured(),
+    // solo i nomi delle impostazioni mancanti, mai i valori: aiuta a capire cosa sistemare su Render
+    manca: [!isClaudeConfigured() && 'ANTHROPIC_API_KEY', !invitesConfigured() && 'INVITI'].filter(Boolean),
   });
 });
 
